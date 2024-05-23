@@ -2,19 +2,33 @@ const express = require("express");
 const app = express();
 const axios = require("axios");
 const cors = require("cors");
+const redis = require("redis");
 
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 
-app.get("/photos", async (req, res) => {
+// Create a redis client
+const redisClient = redis.createClient();
+
+app.get("/photos", (req, res) => {
   const album = req.query.albumId;
-  const respose = await axios.get(
-    "https://jsonplaceholder.typicode.com/photos",
-    {
-      params: { album },
+
+  // Check if the data is cached
+  redisClient.get("photos", async (err, photos) => {
+    if (err) console.error(err);
+    if (photos != null) {
+      console.log("Returned from Cache");
+      return res.json(JSON.parse(photos));
     }
-  );
-  res.json(respose.data);
+    console.log("Returned from API");
+    const respose = await axios.get(
+      "https://jsonplaceholder.typicode.com/photos",
+      {
+        params: { album },
+      }
+    );
+    redisClient.setEx("photos", 120, JSON.stringify(respose.data));
+  });
 });
 
 app.get("/photos/:id", async (req, res) => {
